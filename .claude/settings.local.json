@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "WebFetch(domain:www.promptingguide.ai)",
+      "WebFetch(domain:roadmap.sh)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.lagou.com)",
+      "WebFetch(domain:www.zhipin.com)",
+      "WebFetch(domain:ai-jobs.net)",
+      "WebFetch(domain:www.datacamp.com)",
+      "WebFetch(domain:www.shixiseng.com)",
+      "WebFetch(domain:www.nowcoder.com)",
+      "WebFetch(domain:www.linkedin.com)",
+      "WebFetch(domain:www.glassdoor.com)",
+      "Bash(curl -s http://127.0.0.1:8000/)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/chat -H \"Content-Type: application/json\" -d \"{\\\\\"question\\\\\":\\\\\"什么是Python\\\\\"}\")",
+      "Bash(taskkill //F //IM uvicorn.exe)",
+      "Bash(taskkill //F //IM python.exe)"
+    ]
+  }
+}

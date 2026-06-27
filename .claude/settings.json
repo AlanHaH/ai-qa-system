@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sleep 3 && cat /c/Users/ALAN_K~1/AppData/Local/Temp/claude/h--pythonPJ/24cd8d96-0d5c-4341-8f7e-4a4b14199828/tasks/betgrmto2.output)",
+      "Read(//c/Users/ALAN_K~1/AppData/Local/Temp/claude/h--pythonPJ/24cd8d96-0d5c-4341-8f7e-4a4b14199828/tasks/**)",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/chat -H \"Content-Type: application/json\" -d '{\"question\":\"你好，请做个自我介绍\"}')",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //F //PID 25576)",
+      "Bash(curl -s http://127.0.0.1:8000/doc/list)"
+    ]
+  }
+}

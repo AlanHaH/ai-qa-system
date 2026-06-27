@@ -1,0 +1,17 @@
+# Python
+backend/venv/
+__pycache__/
+*.pyc
+
+#frontend
+frontend/node_modules/
+
+#environments
+backend/.env
+
+#ide
+.idea/
+.vscode/
+
+# 系统文件
+*.log
