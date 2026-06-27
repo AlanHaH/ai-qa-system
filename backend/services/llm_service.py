@@ -19,7 +19,7 @@ def ask_llm(question:str)->str:
     if not MODEL_NAME:
         return "没有配置MODEL_NAME,检查.env文件"
 
-    url = f"{BASE_URL}/chat/completions"
+    url = f"{BASE_URL}"
 
     headers = {
         "Content-Type": "application/json",

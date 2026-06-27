@@ -46,9 +46,13 @@ async function upload() {
     body: formData
   })
   const data = await res.json()
-  alert(data.message)
-  selectedFile.value = null
-  loadDocs()
+  if (data.error) {
+    alert(data.error)
+  } else {
+    alert(data.message)
+    selectedFile.value = null
+    loadDocs()
+  }
 }
 
 // 删除文档

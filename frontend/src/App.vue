@@ -3,9 +3,10 @@
 <template>
   <nav>
     <router-link to="/">聊天</router-link> |
-    <router-link to="/docs">知识库</router-link>
-  <router-view />
+    <router-link to="/docs">知识库</router-link> |
+    <router-link to="/vectordb">向量库</router-link>
   </nav>
+  <router-view />
 </template>
 
 <style>

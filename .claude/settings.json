@@ -6,7 +6,13 @@
       "Bash(curl -s -X POST http://127.0.0.1:8000/chat -H \"Content-Type: application/json\" -d '{\"question\":\"你好，请做个自我介绍\"}')",
       "Bash(netstat -ano)",
       "Bash(taskkill //F //PID 25576)",
-      "Bash(curl -s http://127.0.0.1:8000/doc/list)"
+      "Bash(curl -s http://127.0.0.1:8000/doc/list)",
+      "Bash(curl -s https://api.github.com/repos/AlanHaH/ai-qa-system)",
+      "Bash(curl -s -X POST https://platform.xiaomimimo.com/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-co7df9ktsn5clw5lc724leplanp702v5k4ulnt9ia18dxf4r\" -d \"{\\\\\"model\\\\\":\\\\\"mimo-v2.5-pro\\\\\",\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"hello\\\\\"}],\\\\\"max_completion_tokens\\\\\":100}\")",
+      "Bash(curl -s -X POST http://127.0.0.1:8000/chat -H \"Content-Type: application/json\" -d \"{\\\\\"question\\\\\":\\\\\"hello\\\\\"}\")",
+      "Bash(curl -s -X POST https://api.xiaomimimo.com/v1/chat/completions -H \"Content-Type: application/json\" -H \"Authorization: Bearer sk-co7df9ktsn5clw5lc724leplanp702v5k4ulnt9ia18dxf4r\" -d \"{\\\\\"model\\\\\":\\\\\"mimo-v2.5-pro\\\\\",\\\\\"messages\\\\\":[{\\\\\"role\\\\\":\\\\\"user\\\\\",\\\\\"content\\\\\":\\\\\"hello\\\\\"}],\\\\\"max_completion_tokens\\\\\":100}\")",
+      "Bash(curl -s https://api.xiaomimimo.com/v1/models -H \"Authorization: Bearer sk-co7df9ktsn5clw5lc724leplanp702v5k4ulnt9ia18dxf4r\")",
+      "Bash(curl -s http://127.0.0.1:8000/rag/chunks)"
     ]
   }
 }

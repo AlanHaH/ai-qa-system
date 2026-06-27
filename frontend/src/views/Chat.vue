@@ -13,10 +13,14 @@
     </div>
 
     <div class="input-area">
+      <label class="rag-toggle">
+        <input type="checkbox" v-model="useRAG" />
+        知识库问答
+      </label>
       <input
         v-model="question"
         @keyup.enter="send"
-        placeholder="输入你的问题..."
+        :placeholder="useRAG ? '基于知识库回答...' : '输入你的问题...'"
       />
       <button @click="send">发送</button>
     </div>
@@ -28,6 +32,7 @@ import { ref, onMounted } from 'vue'
 
 const question = ref('')
 const messages = ref([])
+const useRAG = ref(false)  // 是否开启知识库问答
 
 // 页面加载时获取历史记录
 onMounted(async () => {
@@ -56,7 +61,12 @@ async function send() {
   messages.value.push({ role: 'ai', content: '' })
 
   try {
-    const res = await fetch('http://127.0.0.1:8000/chat/stream', {
+    // 根据开关选择接口
+    const url = useRAG.value
+      ? 'http://127.0.0.1:8000/rag/chat'
+      : 'http://127.0.0.1:8000/chat/stream'
+
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ question: q })
@@ -145,6 +155,20 @@ h1 {
 .input-area {
   display: flex;
   gap: 8px;
+  align-items: center;
+}
+
+.rag-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.rag-toggle input {
+  cursor: pointer;
 }
 
 .input-area input {
