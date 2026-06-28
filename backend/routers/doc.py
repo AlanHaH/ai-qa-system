@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Document
 from services.doc_service import extract_text
-from services.rag_service import add_document
+from services.rag_service import add_document, delete_document
 
 router = APIRouter()
 
@@ -62,6 +62,10 @@ def delete_doc(doc_id: int, db: Session = Depends(get_db)):
     doc = db.query(Document).filter(Document.id == doc_id).first()
     if not doc:
         return {"error": "文档不存在"}
+
+    # 同步删除向量库中的数据
+    delete_document(doc_id)
+
     db.delete(doc)
     db.commit()
     return {"message": "删除成功"}

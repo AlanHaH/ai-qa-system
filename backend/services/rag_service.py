@@ -35,6 +35,19 @@ def add_document(doc_id: int, text: str):
         )
 
 
+def delete_document(doc_id: int):
+    """
+    从向量库删除指定文档的所有片段。
+    先查找该文档的所有 chunk ID，然后批量删除。
+    """
+    # 获取所有数据
+    data = collection.get()
+    # 找出以 doc_{doc_id}_ 开头的 ID
+    ids_to_delete = [id for id in data["ids"] if id.startswith(f"doc_{doc_id}_")]
+    if ids_to_delete:
+        collection.delete(ids=ids_to_delete)
+
+
 def search_similar(question: str, top_k: int = 3) -> list:
     """
     根据用户问题，从向量库检索最相关的文档片段。

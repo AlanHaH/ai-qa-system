@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import chat, doc, rag
+from routers import chat, doc, rag, user
 
 # 读取.env文件配置
 load_dotenv()
@@ -22,6 +22,7 @@ app.add_middleware(
 app.include_router(chat.router)
 app.include_router(doc.router)
 app.include_router(rag.router)
+app.include_router(user.router)
 @app.get("/")
 def home():
     return {

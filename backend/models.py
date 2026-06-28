@@ -19,3 +19,10 @@ class Document(Base):
     content = Column(LONGTEXT, nullable=False, comment="提取的文本内容")
     created_at = Column(DateTime, server_default=func.now(), comment="上传时间")
 
+class User(Base):
+    __tablename__ = "user"
+
+    id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    username = Column(String(50), unique=True, nullable=False, comment="用户名")
+    password = Column(String(255), nullable=False, comment="密码（加密后）")
+    created_at = Column(DateTime, server_default=func.now(), comment="注册时间")
