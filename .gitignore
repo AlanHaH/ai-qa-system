@@ -6,8 +6,11 @@ __pycache__/
 #frontend
 frontend/node_modules/
 
-#environments
+# 环境变量
 backend/.env
+
+# 向量库数据
+backend/chroma_db/
 
 #ide
 .idea/

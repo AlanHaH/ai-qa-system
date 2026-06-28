@@ -1,1 +1,0 @@
-invalid type: string " comment 'ID',\n  name varchar(10) comment '姓名',\n  money double(10,2) comment '余额'\n) comment '账户表';\ninsert into account(name, money) VALUES ('张三',2000), ('李四',2000);1\n2\n3\n4\n5\n6\n7\n8\n9\n-- 1. 查询张三余额\nselect * from account where name = '张三';\n-- 2. 张三的余额减少 1000\ny > ( select salary from emp where name = '灭绝' ); 1
