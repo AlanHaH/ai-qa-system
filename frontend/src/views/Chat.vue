@@ -100,6 +100,16 @@ async function send() {
   try {
     const url = useRAG.value ? '/rag/chat' : '/chat/stream'
 
+    // 构建历史记录（最近10条）
+    const history = messages.value
+      .slice(0, -1)  // 排除当前空的 AI 消息
+      .filter(msg => msg.content)  // 过滤空内容
+      .slice(-10)  // 只取最近10条
+      .map(msg => ({
+        role: msg.role === 'ai' ? 'assistant' : msg.role,
+        content: msg.content
+      }))
+
     const token = localStorage.getItem('token')
     const res = await fetch(`http://127.0.0.1:8000${url}`, {
       method: 'POST',
@@ -107,7 +117,7 @@ async function send() {
         'Content-Type': 'application/json',
         'Authorization': token ? `Bearer ${token}` : ''
       },
-      body: JSON.stringify({ question: q })
+      body: JSON.stringify({ question: q, history: history })
     })
 
     const reader = res.body.getReader()

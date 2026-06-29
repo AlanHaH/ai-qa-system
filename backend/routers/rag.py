@@ -1,10 +1,11 @@
 from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from typing import List, Optional
 from database import SessionLocal
 from models import ChatRecord
 from services.rag_service import search_similar
-from services.llm_service import ask_llm_stream
+from services.llm_service import ask_llm_stream, compress_history
 from services.auth_service import get_current_user_id
 
 router = APIRouter()
@@ -26,14 +27,47 @@ def get_user_id(authorization: str = Header(None)):
     return get_current_user_id(token)
 
 
+class ChatMessage(BaseModel):
+    role: str
+    content: str
+
+
 class RAGRequest(BaseModel):
     question: str
+    history: Optional[List[ChatMessage]] = None
+
+
+def build_history_with_summary(history: List[ChatMessage]) -> List[dict]:
+    """构建带摘要的历史记录"""
+    if not history:
+        return []
+
+    history_dicts = [{"role": msg.role, "content": msg.content} for msg in history]
+
+    if len(history_dicts) <= 5:
+        return history_dicts
+
+    old_history = history_dicts[:-5]
+    recent_history = history_dicts[-5:]
+
+    summary = compress_history(old_history)
+
+    result = []
+    if summary:
+        result.append({"role": "user", "content": f"[历史摘要] 之前我们讨论了：{summary}"})
+        result.append({"role": "assistant", "content": "好的，我了解之前的对话内容。"})
+    result.extend(recent_history)
+
+    return result
 
 
 @router.post("/rag/chat")
 def rag_chat(request: RAGRequest, authorization: str = Header(None)):
     """RAG 问答接口"""
     user_id = get_user_id(authorization)
+
+    # 构建带摘要的历史
+    history = build_history_with_summary(request.history)
 
     # 第1步：检索相关片段
     chunks = search_similar(request.question, top_k=3)
@@ -59,13 +93,12 @@ def rag_chat(request: RAGRequest, authorization: str = Header(None)):
 
         full_answer = ""
         try:
-            for chunk in ask_llm_stream(prompt):
+            for chunk in ask_llm_stream(prompt, history=history):
                 full_answer += chunk
                 yield f"data: {chunk}\n\n"
         except Exception as e:
             yield f"data: 错误: {str(e)}\n\n"
         finally:
-            # 流结束后保存到数据库
             if full_answer:
                 try:
                     db = SessionLocal()

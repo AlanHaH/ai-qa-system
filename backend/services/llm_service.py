@@ -63,10 +63,11 @@ def ask_llm(question:str)->str:
         return f"程序发生未知错误:{str(e)}"
 
 
-def ask_llm_stream(question: str):
+def ask_llm_stream(question: str, history: list = None):
     """
-    流式调用大模型 API，逐个返回生成的文本片段。
-    这是一个生成器函数，用 yield 逐个返回内容。
+    流式调用大模型 API，支持历史记录。
+    question: 当前问题
+    history: 历史消息列表 [{"role": "user", "content": "..."}, {"role": "assistant", "content": "..."}]
     """
     API_KEY = os.getenv("API_KEY")
     BASE_URL = os.getenv("BASE_URL")
@@ -83,20 +84,29 @@ def ask_llm_stream(question: str):
         "Authorization": f"Bearer {API_KEY}"
     }
 
+    # 构建消息列表
+    messages = [
+        {
+            "role": "system",
+            "content": "你是一个学习助手，请用适合大学生理解的方式回答问题"
+        }
+    ]
+
+    # 添加历史记录
+    if history:
+        messages.extend(history)
+
+    # 添加当前问题
+    messages.append({
+        "role": "user",
+        "content": question
+    })
+
     data = {
         "model": MODEL_NAME,
-        "messages": [
-            {
-                "role": "system",
-                "content": "你是一个学习助手，请用适合大学生理解的方式回答问题"
-            },
-            {
-                "role": "user",
-                "content": question
-            }
-        ],
+        "messages": messages,
         "max_completion_tokens": 1024,
-        "stream": True  # 开启流式输出
+        "stream": True
     }
 
     try:
@@ -106,15 +116,13 @@ def ask_llm_stream(question: str):
             yield f"请求失败，状态码:{response.status_code}"
             return
 
-        # 逐行读取 SSE 数据
         for line in response.iter_lines():
             if not line:
                 continue
             line = line.decode("utf-8")
-            # SSE 格式：data: {...}
             if not line.startswith("data: "):
                 continue
-            data_str = line[6:]  # 去掉 "data: " 前缀
+            data_str = line[6:]
             if data_str == "[DONE]":
                 break
             try:
@@ -131,3 +139,28 @@ def ask_llm_stream(question: str):
 
     except Exception as e:
         yield f"错误:{str(e)}"
+
+
+def compress_history(history: list) -> str:
+    """
+    压缩历史记录为摘要。
+    把旧的对话发送给 AI，让它生成简短摘要。
+    """
+    if not history:
+        return ""
+
+    # 构建压缩提示
+    history_text = ""
+    for msg in history:
+        role = "用户" if msg["role"] == "user" else "AI"
+        history_text += f"{role}: {msg['content'][:200]}\n"
+
+    prompt = f"""请用3-5句话概括以下对话的要点，保留关键信息：
+
+{history_text}
+
+要求：只输出摘要，不要加其他内容。"""
+
+    # 调用 AI 生成摘要
+    result = ask_llm(prompt)
+    return result
