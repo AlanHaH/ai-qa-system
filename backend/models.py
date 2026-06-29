@@ -7,6 +7,7 @@ class ChatRecord(Base):
     __tablename__ = "chat_record"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, default=0, comment="用户ID")
     question = Column(Text, nullable=False, comment="用户问题")
     answer = Column(Text, nullable=False, comment="AI回答")
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
@@ -15,6 +16,7 @@ class Document(Base):
     __tablename__ = "document"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
+    user_id = Column(Integer, nullable=False, default=0, comment="用户ID")
     filename = Column(String(255), nullable=False, comment="文件名")
     content = Column(LONGTEXT, nullable=False, comment="提取的文本内容")
     created_at = Column(DateTime, server_default=func.now(), comment="上传时间")

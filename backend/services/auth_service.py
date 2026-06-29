@@ -38,3 +38,15 @@ def decode_access_token(token: str) -> dict:
         return payload
     except JWTError:
         return None
+
+
+def get_current_user_id(token: str) -> int:
+    """从 token 中获取当前用户 ID"""
+    payload = decode_access_token(token)
+    if not payload:
+        return None
+    # sub 是字符串，转成整数
+    try:
+        return int(payload.get("sub"))
+    except (ValueError, TypeError):
+        return None

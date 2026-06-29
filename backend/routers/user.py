@@ -59,8 +59,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     if not verify_password(request.password, user.password):
         return {"error": "用户名或密码错误"}
 
-    # 生成 JWT token
-    token = create_access_token({"sub": user.username})
+    # 生成 JWT token（sub 必须是字符串）
+    token = create_access_token({"sub": str(user.id)})
 
     return {
         "message": "登录成功",
@@ -81,8 +81,8 @@ def get_current_user(token: str = "", db: Session = Depends(get_db)):
     if not payload:
         return {"error": "token 无效或已过期"}
 
-    username = payload.get("sub")
-    user = db.query(User).filter(User.username == username).first()
+    user_id = int(payload.get("sub"))
+    user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return {"error": "用户不存在"}
 

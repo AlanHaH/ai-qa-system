@@ -1,49 +1,86 @@
 <template>
   <div class="chat-container">
-    <h1>AI 学习助手</h1>
+    <div class="chat-header">
+      <h1>AI 学习助手</h1>
+      <p class="subtitle">基于大模型与 RAG 的智能问答系统</p>
+    </div>
 
-    <div class="chat-box">
+    <div class="chat-box" ref="chatBox">
+      <div class="welcome" v-if="messages.length === 0">
+        <div class="welcome-icon">🤖</div>
+        <h2>你好，我是 AI 学习助手</h2>
+        <p>有什么问题可以问我，或者开启知识库问答获取更精准的回答</p>
+      </div>
+
       <div
         v-for="(msg, index) in messages"
         :key="index"
         :class="['message', msg.role]"
       >
-        <div class="bubble">{{ msg.content }}</div>
+        <div class="avatar">{{ msg.role === 'user' ? '👤' : '🤖' }}</div>
+        <div class="bubble-wrapper">
+          <!-- 引用片段 -->
+          <div v-if="msg.refs && msg.refs.length > 0" class="references">
+            <div class="refs-header" @click="msg.showRefs = !msg.showRefs">
+              📚 引用了 {{ msg.refs.length }} 个文档片段
+              <span class="toggle-icon">{{ msg.showRefs ? '▼' : '▶' }}</span>
+            </div>
+            <div v-show="msg.showRefs" class="refs-list">
+              <div v-for="(ref, i) in msg.refs" :key="i" class="ref-item">
+                <span class="ref-index">#{{ i + 1 }}</span>
+                <span class="ref-content">{{ ref }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="bubble">{{ msg.content }}</div>
+        </div>
       </div>
     </div>
 
     <div class="input-area">
-      <label class="rag-toggle">
-        <input type="checkbox" v-model="useRAG" />
-        知识库问答
-      </label>
-      <input
-        v-model="question"
-        @keyup.enter="send"
-        :placeholder="useRAG ? '基于知识库回答...' : '输入你的问题...'"
-      />
-      <button @click="send">发送</button>
+      <el-checkbox v-model="useRAG">知识库问答</el-checkbox>
+      <div class="input-wrapper">
+        <el-input
+          v-model="question"
+          @keyup.enter="send"
+          :placeholder="useRAG ? '基于知识库回答...' : '输入你的问题...'"
+          size="large"
+        />
+        <el-button type="primary" @click="send" :disabled="!question.trim()" size="large">
+          发送
+        </el-button>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
+import api from '../api'
 
 const question = ref('')
 const messages = ref([])
-const useRAG = ref(false)  // 是否开启知识库问答
+const useRAG = ref(false)
+const chatBox = ref(null)
+
+// 滚动到底部
+function scrollToBottom() {
+  nextTick(() => {
+    if (chatBox.value) {
+      chatBox.value.scrollTop = chatBox.value.scrollHeight
+    }
+  })
+}
 
 // 页面加载时获取历史记录
 onMounted(async () => {
   try {
-    const res = await fetch('http://127.0.0.1:8000/chat/history')
-    const data = await res.json()
-    // 数据库返回的是倒序（最新在前），需要反转成正序
-    data.reverse().forEach(record => {
+    const res = await api.get('/chat/history')
+    res.data.reverse().forEach(record => {
       messages.value.push({ role: 'user', content: record.question })
-      messages.value.push({ role: 'ai', content: record.answer })
+      messages.value.push({ role: 'ai', content: record.answer, refs: [], showRefs: false })
     })
+    scrollToBottom()
   } catch (err) {
     console.log('加载历史记录失败：', err)
   }
@@ -55,42 +92,57 @@ async function send() {
   const q = question.value
   messages.value.push({ role: 'user', content: q })
   question.value = ''
+  scrollToBottom()
 
-  // 先添加一个空的 AI 消息，后续逐字填充
   const aiIndex = messages.value.length
-  messages.value.push({ role: 'ai', content: '' })
+  messages.value.push({ role: 'ai', content: '', refs: [], showRefs: false })
 
   try {
-    // 根据开关选择接口
-    const url = useRAG.value
-      ? 'http://127.0.0.1:8000/rag/chat'
-      : 'http://127.0.0.1:8000/chat/stream'
+    const url = useRAG.value ? '/rag/chat' : '/chat/stream'
 
-    const res = await fetch(url, {
+    const token = localStorage.getItem('token')
+    const res = await fetch(`http://127.0.0.1:8000${url}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? `Bearer ${token}` : ''
+      },
       body: JSON.stringify({ question: q })
     })
 
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
-    let buffer = ''  // 缓存未处理完的数据
+    let buffer = ''
 
     while (true) {
       const { done, value } = await reader.read()
       if (done) break
 
       buffer += decoder.decode(value, { stream: true })
-      // 按行分割处理
       const lines = buffer.split('\n')
-      buffer = lines.pop()  // 最后一行可能不完整，留到下次处理
+      buffer = lines.pop()
 
       for (const line of lines) {
         if (line.startsWith('data: ')) {
           const content = line.slice(6).trim()
           if (content === '[DONE]') return
+
+          // 检查是否是引用片段
+          try {
+            const data = JSON.parse(content)
+            if (data.type === 'references') {
+              messages.value[aiIndex].refs = data.chunks
+              messages.value[aiIndex].showRefs = true
+              scrollToBottom()
+              continue
+            }
+          } catch {
+            // 不是 JSON，正常文本
+          }
+
           if (content) {
             messages.value[aiIndex].content += content
+            scrollToBottom()
           }
         }
       }
@@ -103,92 +155,196 @@ async function send() {
 
 <style scoped>
 .chat-container {
-  max-width: 700px;
+  max-width: 800px;
   margin: 0 auto;
   padding: 20px;
-  font-family: sans-serif;
+  height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
 }
 
-h1 {
+.chat-header {
   text-align: center;
+  margin-bottom: 20px;
+}
+
+.chat-header h1 {
+  font-size: 24px;
+  color: #1a1a1a;
+  margin: 0 0 4px 0;
+}
+
+.subtitle {
+  font-size: 13px;
+  color: #888;
+  margin: 0;
 }
 
 .chat-box {
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  padding: 16px;
-  height: 400px;
+  flex: 1;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 20px;
   overflow-y: auto;
+  background: #f8f9fa;
   margin-bottom: 16px;
-  background: #fafafa;
+}
+
+.welcome {
+  text-align: center;
+  padding: 60px 20px;
+  color: #666;
+}
+
+.welcome-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.welcome h2 {
+  font-size: 20px;
+  color: #333;
+  margin: 0 0 8px 0;
+}
+
+.welcome p {
+  font-size: 14px;
+  margin: 0;
 }
 
 .message {
-  margin-bottom: 12px;
   display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+  align-items: flex-start;
 }
 
 .message.user {
-  justify-content: flex-end;
+  flex-direction: row-reverse;
 }
 
-.message.ai {
-  justify-content: flex-start;
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.bubble-wrapper {
+  max-width: 70%;
+}
+
+.message.user .bubble-wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
 }
 
 .bubble {
-  max-width: 70%;
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 
 .message.user .bubble {
   background: #409eff;
   color: white;
+  border-top-right-radius: 4px;
 }
 
 .message.ai .bubble {
-  background: #e5e5ea;
-  color: black;
+  background: #fff;
+  color: #333;
+  border: 1px solid #e5e5e5;
+  border-top-left-radius: 4px;
+}
+
+/* 引用片段样式 */
+.references {
+  margin-bottom: 8px;
+  background: #fff;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.refs-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: #666;
+  background: #f5f7fa;
+  cursor: pointer;
+  user-select: none;
+}
+
+.refs-header:hover {
+  background: #ecf5ff;
+}
+
+.toggle-icon {
+  font-size: 10px;
+}
+
+.refs-list {
+  padding: 8px;
+}
+
+.ref-item {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  background: #fafafa;
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.ref-item:last-child {
+  margin-bottom: 0;
+}
+
+.ref-index {
+  color: #409eff;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.ref-content {
+  color: #666;
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  line-clamp: 3;
 }
 
 .input-area {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
 }
 
-.rag-toggle {
+.input-wrapper {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 13px;
-  white-space: nowrap;
-  cursor: pointer;
+  gap: 8px;
 }
 
-.rag-toggle input {
-  cursor: pointer;
-}
-
-.input-area input {
-  flex: 1;
-  padding: 10px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  font-size: 14px;
-}
-
-.input-area button {
-  padding: 10px 20px;
-  background: #409eff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.input-area button:hover {
-  background: #337ecc;
+.input-wrapper button:disabled {
+  background: #a0cfff;
+  cursor: not-allowed;
 }
 </style>
