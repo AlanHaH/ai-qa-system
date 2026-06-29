@@ -36,10 +36,12 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '../stores/user'
+import { useChatStore } from '../stores/chat'
 import api from '../api'
 
 const router = useRouter()
 const userStore = useUserStore()
+const chatStore = useChatStore()
 
 // 如果已登录，直接跳转到首页
 onMounted(() => {
@@ -75,6 +77,7 @@ async function submit() {
       if (isLogin.value) {
         // 用 Pinia 保存用户状态
         userStore.login(data.token, data.username, data.user_id)
+        chatStore.loadUserData()
         ElMessage.success('登录成功')
         router.push('/')
       } else {

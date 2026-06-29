@@ -1,43 +1,68 @@
 <script setup>
-import { onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from './stores/user'
+import { useChatStore } from './stores/chat'
+import ChatSidebar from './components/ChatSidebar.vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+const chatStore = useChatStore()
 
 onMounted(async () => {
   if (userStore.isLoggedIn()) {
     await userStore.fetchUserInfo()
+    chatStore.loadUserData()
+  }
+})
+
+// 监听用户变化，加载对应的聊天数据
+watch(() => userStore.userId, (newUserId) => {
+  if (newUserId) {
+    chatStore.loadUserData()
   }
 })
 
 function logout() {
+  chatStore.saveCurrentSession()
   userStore.logout()
+  chatStore.clearMessages()
   router.push('/login')
 }
 </script>
 
 <template>
-  <nav>
-    <div class="nav-left">
-      <div class="logo">🤖 AI QA</div>
-      <div class="nav-links">
-        <router-link to="/">聊天</router-link>
-        <router-link to="/docs">知识库</router-link>
-        <router-link to="/vectordb">向量库</router-link>
+  <div class="app-container">
+    <!-- 导航栏 -->
+    <nav>
+      <div class="nav-left">
+        <div class="logo">🤖 AI QA</div>
+        <div class="nav-links">
+          <router-link to="/">聊天</router-link>
+          <router-link to="/docs">知识库</router-link>
+          <router-link to="/vectordb">向量库</router-link>
+        </div>
       </div>
+      <div class="nav-right">
+        <span v-if="userStore.username" class="user-info">
+          <span class="user-avatar">👤</span>
+          <span class="user-name">{{ userStore.username }}</span>
+          <a @click="logout" class="logout">退出</a>
+        </span>
+        <router-link v-else to="/login" class="login-btn">登录</router-link>
+      </div>
+    </nav>
+
+    <!-- 主体区域 -->
+    <div class="main-content">
+      <!-- 聊天页面显示侧边栏 -->
+      <ChatSidebar v-if="route.path === '/' && userStore.isLoggedIn()" />
+      
+      <!-- 路由出口 -->
+      <router-view class="router-view" />
     </div>
-    <div class="nav-right">
-      <span v-if="userStore.username" class="user-info">
-        <span class="user-avatar">👤</span>
-        <span class="user-name">{{ userStore.username }}</span>
-        <a @click="logout" class="logout">退出</a>
-      </span>
-      <router-link v-else to="/login" class="login-btn">登录</router-link>
-    </div>
-  </nav>
-  <router-view />
+  </div>
 </template>
 
 <style>
@@ -49,6 +74,12 @@ function logout() {
 
 body {
   background: #f5f7fa;
+}
+
+.app-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 nav {
@@ -146,5 +177,16 @@ nav {
 .login-btn:hover {
   background: #409eff;
   color: #fff !important;
+}
+
+.main-content {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+}
+
+.router-view {
+  flex: 1;
+  overflow-y: auto;
 }
 </style>

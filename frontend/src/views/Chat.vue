@@ -6,14 +6,14 @@
     </div>
 
     <div class="chat-box" ref="chatBox">
-      <div class="welcome" v-if="messages.length === 0">
+      <div class="welcome" v-if="chatStore.messages.length === 0">
         <div class="welcome-icon">🤖</div>
         <h2>你好，我是 AI 学习助手</h2>
         <p>有什么问题可以问我，或者开启知识库问答获取更精准的回答</p>
       </div>
 
       <div
-        v-for="(msg, index) in messages"
+        v-for="(msg, index) in chatStore.messages"
         :key="index"
         :class="['message', msg.role]"
       >
@@ -21,7 +21,7 @@
         <div class="bubble-wrapper">
           <!-- 引用片段 -->
           <div v-if="msg.refs && msg.refs.length > 0" class="references">
-            <div class="refs-header" @click="msg.showRefs = !msg.showRefs">
+            <div class="refs-header" @click="chatStore.toggleRefs(index)">
               📚 引用了 {{ msg.refs.length }} 个文档片段
               <span class="toggle-icon">{{ msg.showRefs ? '▼' : '▶' }}</span>
             </div>
@@ -56,12 +56,13 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
+import { useChatStore } from '../stores/chat'
 import api from '../api'
 
 const question = ref('')
-const messages = ref([])
 const useRAG = ref(false)
 const chatBox = ref(null)
+const chatStore = useChatStore()
 
 // 滚动到底部
 function scrollToBottom() {
@@ -74,12 +75,20 @@ function scrollToBottom() {
 
 // 页面加载时获取历史记录
 onMounted(async () => {
+  // 如果已有消息，不重新加载
+  if (chatStore.messages.length > 0) {
+    scrollToBottom()
+    return
+  }
+
+  // 如果没有当前会话，创建新会话
+  if (!chatStore.currentSessionId) {
+    chatStore.createSession()
+  }
+
   try {
     const res = await api.get('/chat/history')
-    res.data.reverse().forEach(record => {
-      messages.value.push({ role: 'user', content: record.question })
-      messages.value.push({ role: 'ai', content: record.answer, refs: [], showRefs: false })
-    })
+    chatStore.loadHistory(res.data.reverse())
     scrollToBottom()
   } catch (err) {
     console.log('加载历史记录失败：', err)
@@ -90,21 +99,20 @@ async function send() {
   if (!question.value.trim()) return
 
   const q = question.value
-  messages.value.push({ role: 'user', content: q })
+  chatStore.addUserMessage(q)
   question.value = ''
   scrollToBottom()
 
-  const aiIndex = messages.value.length
-  messages.value.push({ role: 'ai', content: '', refs: [], showRefs: false })
+  const aiIndex = chatStore.addAiMessage()
 
   try {
     const url = useRAG.value ? '/rag/chat' : '/chat/stream'
 
     // 构建历史记录（最近10条）
-    const history = messages.value
-      .slice(0, -1)  // 排除当前空的 AI 消息
-      .filter(msg => msg.content)  // 过滤空内容
-      .slice(-10)  // 只取最近10条
+    const history = chatStore.messages
+      .slice(0, -1)
+      .filter(msg => msg.content)
+      .slice(-10)
       .map(msg => ({
         role: msg.role === 'ai' ? 'assistant' : msg.role,
         content: msg.content
@@ -141,8 +149,7 @@ async function send() {
           try {
             const data = JSON.parse(content)
             if (data.type === 'references') {
-              messages.value[aiIndex].refs = data.chunks
-              messages.value[aiIndex].showRefs = true
+              chatStore.setRefs(aiIndex, data.chunks)
               scrollToBottom()
               continue
             }
@@ -151,14 +158,17 @@ async function send() {
           }
 
           if (content) {
-            messages.value[aiIndex].content += content
+            chatStore.updateAiContent(aiIndex, content)
             scrollToBottom()
           }
         }
       }
     }
   } catch (err) {
-    messages.value[aiIndex].content = '请求失败：' + err.message
+    chatStore.updateAiContent(aiIndex, '请求失败：' + err.message)
+  } finally {
+    // 保存会话
+    chatStore.saveCurrentSession()
   }
 }
 </script>
