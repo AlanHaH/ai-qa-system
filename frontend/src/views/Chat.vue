@@ -95,7 +95,8 @@ const useWebSearch = ref(false)
 const webSearchStatus = ref('')
 
 // 后端地址（部署时由 VITE_API_BASE 注入，本地默认直连）
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+// 去掉尾斜杠：避免 VITE_API_BASE='/' 与 '/chat/stream' 拼成 '//chat/stream'（主机名被当成 chat）
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000').replace(/\/+$/, '')
 const chatBox = ref(null)
 const chatStore = useChatStore()
 const userStore = useUserStore()

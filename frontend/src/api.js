@@ -1,7 +1,8 @@
 import axios from 'axios'
 
 // 部署时通过 VITE_API_BASE 注入（.env.production 设 '/' 走同域反代），本地默认直连后端
-const API_BASE = import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000'
+// 去掉尾斜杠：避免 VITE_API_BASE='/' 与 '/chat' 拼成 '//chat'（协议相对 URL，主机名变成 chat）
+const API_BASE = (import.meta.env.VITE_API_BASE || 'http://127.0.0.1:8000').replace(/\/+$/, '')
 
 const api = axios.create({
   baseURL: API_BASE,
