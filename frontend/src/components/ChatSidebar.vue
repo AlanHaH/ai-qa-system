@@ -36,8 +36,8 @@ import { useChatStore } from '../stores/chat'
 
 const chatStore = useChatStore()
 
-function newChat() {
-  chatStore.createSession()
+async function newChat() {
+  await chatStore.createSession()
 }
 </script>
 

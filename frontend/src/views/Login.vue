@@ -1,31 +1,79 @@
 <template>
-  <div class="login-container">
-    <div class="form-box">
-      <div class="form-header">
-        <div class="logo">🤖</div>
-        <h2>{{ isLogin ? '欢迎回来' : '创建账号' }}</h2>
-        <p class="subtitle">{{ isLogin ? '登录后开始使用 AI 学习助手' : '注册后开始你的学习之旅' }}</p>
+  <div class="login-page">
+    <div class="login-card">
+      <!-- 左：产品定位 -->
+      <div class="brand">
+        <div class="brand-mark">
+          <span class="brand-mark-text">问</span>
+        </div>
+        <h1 class="brand-title">把学习资料<br />变成你的 AI 问答库</h1>
+        <p class="brand-sub">上传资料 · 语义检索 · 精准回答</p>
+
+        <ul class="feature-list">
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <strong>自动建库</strong>
+              <span>上传 PDF / TXT / Markdown，自动提取、切分、入库</span>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <strong>检索作答</strong>
+              <span>基于资料内容的语义检索，回答附引用出处</span>
+            </div>
+          </li>
+          <li>
+            <span class="feature-dot"></span>
+            <div>
+              <strong>记忆对话</strong>
+              <span>多会话管理，对话上下文自然延续</span>
+            </div>
+          </li>
+        </ul>
       </div>
 
-      <div class="form-body">
-        <div class="form-item">
-          <label>用户名</label>
-          <el-input v-model="username" placeholder="请输入用户名" size="large" />
+      <!-- 右：登录 / 注册表单 -->
+      <div class="form-panel">
+        <h2 class="form-title">{{ isLogin ? '登录' : '注册' }}</h2>
+        <p class="form-sub">{{ isLogin ? '使用你的账号继续' : '创建一个新账号' }}</p>
+
+        <div class="form-body">
+          <div class="form-item">
+            <label>用户名</label>
+            <el-input v-model="username" placeholder="请输入用户名" size="large" />
+          </div>
+          <div class="form-item">
+            <label>密码</label>
+            <el-input
+              v-model="password"
+              type="password"
+              placeholder="请输入密码"
+              size="large"
+              show-password
+              @keyup.enter="submit"
+            />
+          </div>
+
+          <el-button type="primary" size="large" class="submit-btn" @click="submit">
+            {{ isLogin ? '登录' : '注册' }}
+          </el-button>
+
+          <div class="switch-line">
+            <span>{{ isLogin ? '还没有账号？' : '已有账号？' }}</span>
+            <a class="switch-link" @click="isLogin = !isLogin">{{ isLogin ? '去注册' : '去登录' }}</a>
+          </div>
+
+          <el-alert
+            v-if="errorMsg"
+            :title="errorMsg"
+            :type="errorMsg.includes('成功') ? 'success' : 'error'"
+            show-icon
+            :closable="false"
+            class="error-alert"
+          />
         </div>
-        <div class="form-item">
-          <label>密码</label>
-          <el-input v-model="password" type="password" placeholder="请输入密码" @keyup.enter="submit" size="large" show-password />
-        </div>
-
-        <el-button type="primary" @click="submit" class="submit-btn" size="large">
-          {{ isLogin ? '登录' : '注册' }}
-        </el-button>
-
-        <p class="switch" @click="isLogin = !isLogin">
-          {{ isLogin ? '没有账号？去注册' : '已有账号？去登录' }}
-        </p>
-
-        <el-alert v-if="errorMsg" :title="errorMsg" :type="errorMsg.includes('成功') ? 'success' : 'error'" show-icon :closable="false" style="margin-top: 12px" />
       </div>
     </div>
   </div>
@@ -77,7 +125,7 @@ async function submit() {
       if (isLogin.value) {
         // 用 Pinia 保存用户状态
         userStore.login(data.token, data.username, data.user_id)
-        chatStore.loadUserData()
+        await chatStore.loadUserData()
         ElMessage.success('登录成功')
         router.push('/')
       } else {
@@ -92,99 +140,175 @@ async function submit() {
 </script>
 
 <style scoped>
-.login-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
+.login-page {
   min-height: calc(100vh - 56px);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: linear-gradient(135deg, #0c0c1d 0%, #1a1a3e 50%, #2d1b69 100%);
-  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
+  padding: 40px 24px;
+}
+
+.login-card {
+  width: 920px;
+  max-width: 100%;
+  display: flex;
+  background: #fff;
+  border-radius: 16px;
+  border: 1px solid #e4e7ed;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.05);
   overflow: hidden;
 }
 
-.login-container::before {
-  content: '';
-  position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle at 30% 50%, rgba(99, 102, 241, 0.15) 0%, transparent 50%),
-              radial-gradient(circle at 70% 50%, rgba(168, 85, 247, 0.1) 0%, transparent 50%);
-  animation: float 15s ease-in-out infinite;
+/* 左栏：产品定位 */
+.brand {
+  flex: 1.15;
+  background: #f0f6ff;
+  border-right: 1px solid #e4e7ed;
+  padding: 48px 44px;
+  display: flex;
+  flex-direction: column;
 }
 
-@keyframes float {
-  0%, 100% { transform: translate(0, 0); }
-  50% { transform: translate(-20px, -20px); }
+.brand-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: #409eff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 28px;
 }
 
-.form-box {
-  width: 380px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(20px);
-  border-radius: 20px;
-  box-shadow: 0 25px 80px rgba(0,0,0,0.3), 0 0 40px rgba(99, 102, 241, 0.1);
-  overflow: hidden;
-  position: relative;
-  z-index: 1;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.brand-mark-text {
+  color: #fff;
+  font-size: 20px;
+  font-weight: 600;
 }
 
-.form-header {
-  text-align: center;
-  padding: 32px 32px 0;
+.brand-title {
+  font-size: 28px;
+  line-height: 1.4;
+  font-weight: 600;
+  color: #1f2329;
+  margin: 0 0 10px;
 }
 
-.logo {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.form-header h2 {
-  font-size: 24px;
-  color: #1a1a1a;
-  margin: 0 0 8px 0;
-}
-
-.subtitle {
+.brand-sub {
   font-size: 14px;
-  color: #888;
-  margin: 0;
+  color: #909399;
+  margin: 0 0 36px;
+  letter-spacing: 0.02em;
 }
 
-.form-body {
-  padding: 24px 32px 32px;
+.feature-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.feature-list li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.feature-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #409eff;
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.feature-list strong {
+  display: block;
+  font-size: 15px;
+  color: #1f2329;
+  margin-bottom: 3px;
+  font-weight: 600;
+}
+
+.feature-list span {
+  font-size: 13px;
+  color: #5e6370;
+  line-height: 1.6;
+}
+
+/* 右栏：表单 */
+.form-panel {
+  flex: 1;
+  padding: 48px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.form-title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1f2329;
+  margin: 0 0 6px;
+}
+
+.form-sub {
+  font-size: 14px;
+  color: #909399;
+  margin: 0 0 28px;
 }
 
 .form-item {
-  margin-bottom: 20px;
+  margin-bottom: 18px;
 }
 
 .form-item label {
   display: block;
   font-size: 13px;
-  color: #666;
+  color: #606266;
   margin-bottom: 6px;
   font-weight: 500;
 }
 
 .submit-btn {
   width: 100%;
-  margin-top: 8px;
+  margin-top: 6px;
+  border-radius: 8px;
+  font-weight: 500;
 }
 
-.switch {
-  text-align: center;
-  margin-top: 16px;
-  color: #6366f1;
-  cursor: pointer;
+.switch-line {
+  margin-top: 18px;
   font-size: 13px;
+  color: #909399;
+  text-align: center;
 }
 
-.switch:hover {
+.switch-link {
+  color: #409eff;
+  cursor: pointer;
+  margin-left: 4px;
+}
+
+.switch-link:hover {
   text-decoration: underline;
-  color: #8b5cf6;
+}
+
+.error-alert {
+  margin-top: 16px;
+}
+
+/* 窄屏：只显示表单，隐藏品牌区 */
+@media (max-width: 768px) {
+  .login-card {
+    width: 420px;
+  }
+  .brand {
+    display: none;
+  }
 }
 </style>

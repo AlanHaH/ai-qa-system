@@ -1,61 +1,71 @@
 import chromadb
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+COLLECTION_NAME = "documents"
 
 # 初始化 Chroma 向量库（数据存在 backend/chroma_db 目录）
 # ChromaDB 自带 Embedding 功能，不需要调外部 API
 chroma_client = chromadb.PersistentClient(path="chroma_db")
-collection = chroma_client.get_or_create_collection(name="documents")
+collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+
+# LangChain 封装现有 collection（不传 embedding_function，默认即 all-MiniLM-L6-v2，
+# 与旧数据写入时 ChromaDB 默认 embedding 完全一致，旧向量检索不受影响）
+vectorstore = Chroma(client=chroma_client, collection_name=COLLECTION_NAME)
 
 
-def split_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list:
-    """
-    把长文本切分成小块。
-    chunk_size — 每块的最大字符数
-    overlap — 相邻块重叠的字符数（保持上下文连贯）
-    """
-    chunks = []
-    start = 0
-    while start < len(text):
-        end = start + chunk_size
-        chunks.append(text[start:end])
-        start = end - overlap  # 回退 overlap 个字符，保持连贯
-    return chunks
-
-
-def add_document(doc_id: int, text: str):
-    """
-    把文档切分后存入向量库。
-    ChromaDB 会自动把文本转换成向量，不需要手动调 Embedding API。
-    """
-    chunks = split_text(text)
-    for i, chunk in enumerate(chunks):
-        # ChromaDB 自动处理 Embedding
-        collection.add(
-            ids=[f"doc_{doc_id}_chunk_{i}"],
-            documents=[chunk]
-        )
-
-
-def delete_document(doc_id: int):
-    """
-    从向量库删除指定文档的所有片段。
-    先查找该文档的所有 chunk ID，然后批量删除。
-    """
-    # 获取所有数据
-    data = collection.get()
-    # 找出以 doc_{doc_id}_ 开头的 ID
-    ids_to_delete = [id for id in data["ids"] if id.startswith(f"doc_{doc_id}_")]
-    if ids_to_delete:
-        collection.delete(ids=ids_to_delete)
-
-
-def search_similar(question: str, top_k: int = 3) -> list:
-    """
-    根据用户问题，从向量库检索最相关的文档片段。
-    top_k — 返回最相似的前 k 个结果
-    """
-    # ChromaDB 自动把问题转换成向量，然后检索
-    results = collection.query(
-        query_texts=[question],
-        n_results=top_k
+def _get_splitter() -> RecursiveCharacterTextSplitter:
+    """中文友好的递归切分器（500 字符 / 50 重叠）"""
+    return RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        length_function=len,
+        separators=["\n\n", "\n", "。", "！", "？", "；", "，", " ", ""],
     )
-    return results["documents"][0] if results["documents"] else []
+
+
+def add_document(doc_id: int, text: str, user_id: int = 0, filename: str = ""):
+    """
+    把文档切分后存入向量库，并记录用户和文档来源。
+    """
+    chunks = _get_splitter().split_text(text)
+    if not chunks:
+        return
+    docs = [
+        Document(
+            page_content=c,
+            metadata={"user_id": user_id, "doc_id": doc_id, "filename": filename},
+        )
+        for c in chunks
+    ]
+    ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
+    vectorstore.add_documents(docs, ids=ids)
+
+
+def delete_document(doc_id: int, user_id: int = 0):
+    """
+    从向量库删除指定文档的所有片段（按用户隔离）。
+    用原生 collection 按 doc_id + user_id 过滤取 ids，再走 LangChain 删除。
+    """
+    # ChromaDB where 多条件必须用 $and
+    data = collection.get(where={"$and": [{"doc_id": doc_id}, {"user_id": user_id}]})
+    ids_to_delete = data.get("ids") or []
+    if ids_to_delete:
+        vectorstore.delete(ids=ids_to_delete)
+
+
+def search_similar(question: str, top_k: int = 3, user_id: int = None) -> list:
+    """
+    根据用户问题，从向量库检索最相关的文档片段（只查当前用户的知识库）。
+    返回带来源信息的片段列表：[{content, filename}]
+    """
+    filter_ = {"user_id": user_id} if user_id is not None else None
+    results = vectorstore.similarity_search(question, k=top_k, filter=filter_)
+    return [
+        {
+            "content": doc.page_content,
+            "filename": doc.metadata.get("filename", ""),
+        }
+        for doc in results
+    ]

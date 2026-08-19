@@ -1,12 +1,17 @@
-from fastapi import APIRouter, Depends, Header
+import json
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import ChatRecord
-from services.llm_service import ask_llm, ask_llm_stream, compress_history
-from services.auth_service import get_current_user_id
+from services.llm_service import (
+    ask_llm, ask_llm_stream, compress_history,
+    prepare_web_search, stream_messages, ask_llm_with_web_search,
+)
+from services.prompts import WEB_SEARCH_SYSTEM_PROMPT
+from services.auth_service import require_user
 
 router = APIRouter()
 
@@ -19,6 +24,7 @@ class ChatMessage(BaseModel):
 class ChatRequest(BaseModel):
     question: str
     history: Optional[List[ChatMessage]] = None
+    use_web_search: bool = False  # 是否开启联网搜索
 
 
 def get_db():
@@ -27,14 +33,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def get_user_id(authorization: str = Header(None)):
-    """从请求头获取当前用户 ID"""
-    if not authorization:
-        return None
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    return get_current_user_id(token)
 
 
 def build_history_with_summary(history: List[ChatMessage]) -> List[dict]:
@@ -76,17 +74,20 @@ def build_history_with_summary(history: List[ChatMessage]) -> List[dict]:
 
 
 @router.post("/chat")
-def chat(request: ChatRequest, db: Session = Depends(get_db), authorization: str = Header(None)):
-    user_id = get_user_id(authorization)
-
+def chat(request: ChatRequest, db: Session = Depends(get_db), user_id: int = Depends(require_user)):
     # 构建带摘要的历史
     history = build_history_with_summary(request.history)
 
-    # 调用大模型
-    answer = ask_llm(request.question)
+    # 调用大模型（支持联网搜索）
+    if request.use_web_search:
+        answer, warning = ask_llm_with_web_search(request.question, history, WEB_SEARCH_SYSTEM_PROMPT)
+        if warning:
+            answer = f"[联网搜索提示] {warning}\n\n{answer}"
+    else:
+        answer = ask_llm(request.question)
 
     # 保存到数据库
-    record = ChatRecord(user_id=user_id or 0, question=request.question, answer=answer)
+    record = ChatRecord(user_id=user_id, question=request.question, answer=answer)
     db.add(record)
     db.commit()
 
@@ -94,17 +95,39 @@ def chat(request: ChatRequest, db: Session = Depends(get_db), authorization: str
 
 
 @router.post("/chat/stream")
-def chat_stream(request: ChatRequest, authorization: str = Header(None)):
-    """流式输出接口"""
-    user_id = get_user_id(authorization)
-
+def chat_stream(request: ChatRequest, user_id: int = Depends(require_user)):
+    """流式输出接口（支持联网搜索）"""
     # 构建带摘要的历史
     history = build_history_with_summary(request.history)
 
     def generate():
         full_answer = ""
         try:
-            for chunk in ask_llm_stream(request.question, history=history):
+            if request.use_web_search:
+                # 阶段1：模型思考中
+                yield f"data: {json.dumps({'type': 'web_search', 'phase': 'thinking'}, ensure_ascii=False)}\n\n"
+
+                # 工具决策 + 执行（非流式）
+                messages, tool_call, warning = prepare_web_search(
+                    request.question, history, WEB_SEARCH_SYSTEM_PROMPT
+                )
+
+                # 阶段2：命中工具 → 通知"正在执行"
+                if tool_call:
+                    args = tool_call.get("args") or {}
+                    query = args.get("query") if tool_call.get("name") == "web_search" else "获取当前时间"
+                    yield f"data: {json.dumps({'type': 'web_search', 'phase': 'searching', 'query': query}, ensure_ascii=False)}\n\n"
+
+                # 阶段3：降级提示
+                if warning:
+                    yield f"data: {json.dumps({'type': 'notice', 'message': warning}, ensure_ascii=False)}\n\n"
+
+                # 阶段4：流式最终回答（用普通 model，不再触发工具）
+                text_gen = stream_messages(messages)
+            else:
+                text_gen = ask_llm_stream(request.question, history=history)
+
+            for chunk in text_gen:
                 full_answer += chunk
                 yield f"data: {chunk}\n\n"
         except Exception as e:
@@ -113,7 +136,7 @@ def chat_stream(request: ChatRequest, authorization: str = Header(None)):
             if full_answer:
                 try:
                     db = SessionLocal()
-                    record = ChatRecord(user_id=user_id or 0, question=request.question, answer=full_answer)
+                    record = ChatRecord(user_id=user_id, question=request.question, answer=full_answer)
                     db.add(record)
                     db.commit()
                     db.close()
@@ -125,12 +148,8 @@ def chat_stream(request: ChatRequest, authorization: str = Header(None)):
 
 
 @router.get("/chat/history")
-def chat_history(db: Session = Depends(get_db), authorization: str = Header(None)):
+def chat_history(db: Session = Depends(get_db), user_id: int = Depends(require_user)):
     """查询当前用户的聊天记录"""
-    user_id = get_user_id(authorization)
-    if not user_id:
-        return []
-
     records = db.query(ChatRecord).filter(
         ChatRecord.user_id == user_id
     ).order_by(ChatRecord.id.desc()).limit(20).all()

@@ -13,19 +13,19 @@ const chatStore = useChatStore()
 onMounted(async () => {
   if (userStore.isLoggedIn()) {
     await userStore.fetchUserInfo()
-    chatStore.loadUserData()
+    await chatStore.loadUserData()
   }
 })
 
 // 监听用户变化，加载对应的聊天数据
-watch(() => userStore.userId, (newUserId) => {
+watch(() => userStore.userId, async (newUserId) => {
   if (newUserId) {
-    chatStore.loadUserData()
+    await chatStore.loadUserData()
   }
 })
 
-function logout() {
-  chatStore.saveCurrentSession()
+async function logout() {
+  await chatStore.saveCurrentSession()
   userStore.logout()
   chatStore.clearMessages()
   router.push('/login')
@@ -37,7 +37,10 @@ function logout() {
     <!-- 导航栏 -->
     <nav>
       <div class="nav-left">
-        <div class="logo">🤖 AI QA</div>
+        <div class="logo">
+          <span class="logo-mark">问</span>
+          <span class="logo-text">学习问答</span>
+        </div>
         <div class="nav-links">
           <router-link to="/">聊天</router-link>
           <router-link to="/docs">知识库</router-link>
@@ -46,7 +49,7 @@ function logout() {
       </div>
       <div class="nav-right">
         <span v-if="userStore.username" class="user-info">
-          <span class="user-avatar">👤</span>
+          <span class="user-avatar">{{ userStore.username.charAt(0).toUpperCase() }}</span>
           <span class="user-name">{{ userStore.username }}</span>
           <a @click="logout" class="logout">退出</a>
         </span>
@@ -100,9 +103,28 @@ nav {
 }
 
 .logo {
-  font-size: 18px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  background: #409eff;
+  color: #fff;
+  font-size: 15px;
   font-weight: 600;
-  color: #1a1a1a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo-text {
+  font-size: 17px;
+  font-weight: 600;
+  color: #1f2329;
 }
 
 .nav-links {
@@ -143,7 +165,17 @@ nav {
 }
 
 .user-avatar {
-  font-size: 18px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #409eff;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .user-name {

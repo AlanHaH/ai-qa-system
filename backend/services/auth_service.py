@@ -1,5 +1,6 @@
 import os
 from datetime import datetime, timedelta
+from fastapi import Header, HTTPException
 from jose import JWTError, jwt
 import bcrypt
 
@@ -50,3 +51,14 @@ def get_current_user_id(token: str) -> int:
         return int(payload.get("sub"))
     except (ValueError, TypeError):
         return None
+
+
+def require_user(authorization: str = Header(None)) -> int:
+    """强制登录验证依赖：无 token 或 token 无效/过期时抛 401"""
+    if not authorization:
+        raise HTTPException(status_code=401, detail="请先登录")
+    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
+    user_id = get_current_user_id(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="token 无效或已过期")
+    return user_id

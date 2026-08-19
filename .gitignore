@@ -18,3 +18,9 @@ backend/chroma_db/
 
 # 系统文件
 *.log
+
+# playwright 临时文件
+.playwright-cli/
+
+# 根目录环境变量（docker-compose 部署用，含密钥）
+/.env

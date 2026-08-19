@@ -1,10 +1,10 @@
-from fastapi import APIRouter, UploadFile, File, Depends, Header
+from fastapi import APIRouter, UploadFile, File, Depends
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import Document
 from services.doc_service import extract_text
 from services.rag_service import add_document, delete_document
-from services.auth_service import get_current_user_id
+from services.auth_service import require_user
 
 router = APIRouter()
 
@@ -17,19 +17,9 @@ def get_db():
         db.close()
 
 
-def get_user_id(authorization: str = Header(None)):
-    """从请求头获取当前用户 ID"""
-    if not authorization:
-        return None
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    return get_current_user_id(token)
-
-
 @router.post("/doc/upload")
-async def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db), authorization: str = Header(None)):
+async def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db), user_id: int = Depends(require_user)):
     """上传文档，提取文本并保存到数据库"""
-    user_id = get_user_id(authorization)
-
     content = await file.read()
 
     # 限制文件大小为 10MB
@@ -39,13 +29,13 @@ async def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db)
 
     text = extract_text(content, file.filename)
 
-    doc = Document(user_id=user_id or 0, filename=file.filename, content=text)
+    doc = Document(user_id=user_id, filename=file.filename, content=text)
     db.add(doc)
     db.commit()
     db.refresh(doc)
 
-    # 同步存入向量库（切分 + 向量化）
-    add_document(doc.id, text)
+    # 同步存入向量库（切分 + 向量化，带用户和文档来源）
+    add_document(doc.id, text, user_id, file.filename)
 
     return {
         "id": doc.id,
@@ -55,12 +45,8 @@ async def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db)
 
 
 @router.get("/doc/list")
-def doc_list(db: Session = Depends(get_db), authorization: str = Header(None)):
+def doc_list(db: Session = Depends(get_db), user_id: int = Depends(require_user)):
     """查询当前用户的文档列表"""
-    user_id = get_user_id(authorization)
-    if not user_id:
-        return []
-
     docs = db.query(Document).filter(
         Document.user_id == user_id
     ).order_by(Document.id.desc()).all()
@@ -76,15 +62,14 @@ def doc_list(db: Session = Depends(get_db), authorization: str = Header(None)):
 
 
 @router.delete("/doc/{doc_id}")
-def delete_doc(doc_id: int, db: Session = Depends(get_db), authorization: str = Header(None)):
+def delete_doc(doc_id: int, db: Session = Depends(get_db), user_id: int = Depends(require_user)):
     """删除指定文档"""
-    user_id = get_user_id(authorization)
     doc = db.query(Document).filter(Document.id == doc_id, Document.user_id == user_id).first()
     if not doc:
         return {"error": "文档不存在"}
 
-    # 同步删除向量库中的数据
-    delete_document(doc_id)
+    # 同步删除向量库中的数据（按用户隔离）
+    delete_document(doc_id, user_id)
 
     db.delete(doc)
     db.commit()

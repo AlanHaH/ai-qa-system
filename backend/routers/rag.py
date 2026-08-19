@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Header
+from fastapi import APIRouter, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import List, Optional
@@ -6,7 +6,8 @@ from database import SessionLocal
 from models import ChatRecord
 from services.rag_service import search_similar
 from services.llm_service import ask_llm_stream, compress_history
-from services.auth_service import get_current_user_id
+from services.prompts import RAG_PROMPT, RAG_SYSTEM_PROMPT
+from services.auth_service import require_user
 
 router = APIRouter()
 
@@ -17,14 +18,6 @@ def get_db():
         yield db
     finally:
         db.close()
-
-
-def get_user_id(authorization: str = Header(None)):
-    """从请求头获取当前用户 ID"""
-    if not authorization:
-        return None
-    token = authorization.replace("Bearer ", "") if authorization.startswith("Bearer ") else authorization
-    return get_current_user_id(token)
 
 
 class ChatMessage(BaseModel):
@@ -62,27 +55,20 @@ def build_history_with_summary(history: List[ChatMessage]) -> List[dict]:
 
 
 @router.post("/rag/chat")
-def rag_chat(request: RAGRequest, authorization: str = Header(None)):
+def rag_chat(request: RAGRequest, user_id: int = Depends(require_user)):
     """RAG 问答接口"""
-    user_id = get_user_id(authorization)
-
     # 构建带摘要的历史
     history = build_history_with_summary(request.history)
 
-    # 第1步：检索相关片段
-    chunks = search_similar(request.question, top_k=3)
+    # 第1步：检索相关片段（只查当前用户的知识库）
+    chunks = search_similar(request.question, top_k=3, user_id=user_id)
 
     if not chunks:
         return {"answer": "没有找到相关资料，请先上传文档。"}
 
     # 第2步：拼接 Prompt
-    context = "\n\n".join(chunks)
-    prompt = f"""请根据以下资料回答用户的问题。如果资料中没有相关内容，请说"资料中没有找到相关信息"。
-
-相关资料：
-{context}
-
-用户问题：{request.question}"""
+    context = "\n\n".join(c["content"] for c in chunks)
+    prompt = RAG_PROMPT.format(context=context, question=request.question)
 
     # 第3步：流式调用大模型
     def generate():
@@ -93,7 +79,7 @@ def rag_chat(request: RAGRequest, authorization: str = Header(None)):
 
         full_answer = ""
         try:
-            for chunk in ask_llm_stream(prompt, history=history):
+            for chunk in ask_llm_stream(prompt, history=history, system_prompt=RAG_SYSTEM_PROMPT):
                 full_answer += chunk
                 yield f"data: {chunk}\n\n"
         except Exception as e:
@@ -102,7 +88,7 @@ def rag_chat(request: RAGRequest, authorization: str = Header(None)):
             if full_answer:
                 try:
                     db = SessionLocal()
-                    record = ChatRecord(user_id=user_id or 0, question=request.question, answer=full_answer)
+                    record = ChatRecord(user_id=user_id, question=request.question, answer=full_answer)
                     db.add(record)
                     db.commit()
                     db.close()
@@ -114,17 +100,21 @@ def rag_chat(request: RAGRequest, authorization: str = Header(None)):
 
 
 @router.get("/rag/chunks")
-def get_chunks():
-    """查看向量库中的所有文档片段"""
+def get_chunks(user_id: int = Depends(require_user)):
+    """查看当前用户向量库中的所有文档片段"""
     from services.rag_service import collection
-    data = collection.get()
+    data = collection.get(where={"user_id": user_id})
+    ids = data["ids"]
+    docs = data["documents"]
+    metas = data["metadatas"]
     return {
-        "total": len(data["ids"]),
+        "total": len(ids),
         "chunks": [
             {
-                "id": data["ids"][i],
-                "content": data["documents"][i][:200] + "..." if len(data["documents"][i]) > 200 else data["documents"][i]
+                "id": ids[i],
+                "content": docs[i][:200] + "..." if len(docs[i]) > 200 else docs[i],
+                "filename": (metas[i] or {}).get("filename", "") if i < len(metas) else "",
             }
-            for i in range(len(data["ids"]))
+            for i in range(len(ids))
         ]
     }

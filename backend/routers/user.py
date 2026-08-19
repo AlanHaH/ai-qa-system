@@ -1,9 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import SessionLocal
 from models import User
-from services.auth_service import hash_password, verify_password, create_access_token, decode_access_token
+from services.auth_service import hash_password, verify_password, create_access_token, require_user
 
 router = APIRouter()
 
@@ -71,17 +71,8 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/user/me")
-def get_current_user(token: str = "", db: Session = Depends(get_db)):
-    """获取当前用户信息（通过 token）"""
-    if not token:
-        return {"error": "未提供 token"}
-
-    # 解析 token
-    payload = decode_access_token(token)
-    if not payload:
-        return {"error": "token 无效或已过期"}
-
-    user_id = int(payload.get("sub"))
+def get_current_user(user_id: int = Depends(require_user), db: Session = Depends(get_db)):
+    """获取当前用户信息（强制登录验证）"""
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return {"error": "用户不存在"}

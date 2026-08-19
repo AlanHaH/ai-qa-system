@@ -305,7 +305,543 @@ npm run dev
 
 ---
 
-## 六、剩余任务
+## 六、对话会话管理
+
+### 1. 问题
+
+之前的聊天记录存在组件的 `ref` 里，切换页面后组件销毁，数据就没了。
+
+### 2. 解决方案
+
+用 Pinia 保存聊天记录，持久化到 localStorage。
+
+### 3. 实现
+
+#### 3.1 创建聊天状态仓库
+
+**`stores/chat.js`**：
+
+```javascript
+import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
+import { useUserStore } from './user'
+
+export const useChatStore = defineStore('chat', () => {
+  const userStore = useUserStore()
+  
+  // 获取用户专属的存储 key
+  function getStorageKey(key) {
+    const userId = userStore.userId || 'guest'
+    return `${key}_${userId}`
+  }
+
+  // 所有对话会话
+  const sessions = ref([])
+  const currentSessionId = ref('')
+  const messages = ref([])
+
+  // 加载用户数据
+  function loadUserData() {
+    sessions.value = JSON.parse(localStorage.getItem(getStorageKey('chat_sessions')) || '[]')
+    currentSessionId.value = localStorage.getItem(getStorageKey('current_session_id')) || ''
+    
+    // 加载当前会话的消息
+    if (currentSessionId.value) {
+      const session = sessions.value.find(s => s.id === currentSessionId.value)
+      messages.value = session ? [...session.messages] : []
+    } else {
+      messages.value = []
+    }
+  }
+
+  // 保存到 localStorage
+  function saveSessions() {
+    localStorage.setItem(getStorageKey('chat_sessions'), JSON.stringify(sessions.value))
+    localStorage.setItem(getStorageKey('current_session_id'), currentSessionId.value)
+  }
+
+  // 创建新会话
+  function createSession() {
+    // 保存当前会话
+    if (currentSessionId.value && messages.value.length > 0) {
+      saveCurrentSession()
+    }
+    
+    // 创建新会话
+    const id = Date.now().toString()
+    const session = {
+      id,
+      title: '新对话',
+      messages: [],
+      createdAt: new Date().toISOString()
+    }
+    sessions.value.unshift(session)
+    currentSessionId.value = id
+    messages.value = []
+    saveSessions()
+    return id
+  }
+
+  // 保存当前会话
+  function saveCurrentSession() {
+    if (!currentSessionId.value) return
+    
+    const index = sessions.value.findIndex(s => s.id === currentSessionId.value)
+    if (index !== -1) {
+      // 更新标题（用第一条用户消息）
+      const firstUserMsg = messages.value.find(m => m.role === 'user')
+      sessions.value[index].title = firstUserMsg 
+        ? firstUserMsg.content.substring(0, 30) + (firstUserMsg.content.length > 30 ? '...' : '')
+        : '新对话'
+      sessions.value[index].messages = [...messages.value]
+      saveSessions()
+    }
+  }
+
+  // 切换会话
+  function switchSession(sessionId) {
+    // 保存当前会话
+    if (currentSessionId.value && messages.value.length > 0) {
+      saveCurrentSession()
+    }
+    
+    // 切换到新会话
+    currentSessionId.value = sessionId
+    const session = sessions.value.find(s => s.id === sessionId)
+    messages.value = session ? [...session.messages] : []
+    saveSessions()
+  }
+
+  // 删除会话
+  function deleteSession(sessionId) {
+    sessions.value = sessions.value.filter(s => s.id !== sessionId)
+    
+    // 如果删除的是当前会话，切换到第一个会话
+    if (currentSessionId.value === sessionId) {
+      if (sessions.value.length > 0) {
+        switchSession(sessions.value[0].id)
+      } else {
+        currentSessionId.value = ''
+        messages.value = []
+      }
+    }
+    saveSessions()
+  }
+
+  // 添加用户消息
+  function addUserMessage(content) {
+    messages.value.push({ role: 'user', content })
+  }
+
+  // 添加 AI 消息
+  function addAiMessage() {
+    const index = messages.value.length
+    messages.value.push({ role: 'ai', content: '', refs: [], showRefs: true })
+    return index
+  }
+
+  // 更新 AI 消息内容
+  function updateAiContent(index, content) {
+    if (messages.value[index]) {
+      messages.value[index].content += content
+    }
+  }
+
+  // 设置引用片段
+  function setRefs(index, chunks) {
+    if (messages.value[index]) {
+      messages.value[index].refs = chunks
+    }
+  }
+
+  // 切换引用片段显示
+  function toggleRefs(index) {
+    if (messages.value[index]) {
+      messages.value[index].showRefs = !messages.value[index].showRefs
+    }
+  }
+
+  // 加载历史记录（从后端）
+  function loadHistory(historyList) {
+    messages.value = []
+    historyList.forEach(record => {
+      messages.value.push({ role: 'user', content: record.question })
+      messages.value.push({ role: 'ai', content: record.answer, refs: [], showRefs: true })
+    })
+  }
+
+  // 清空消息
+  function clearMessages() {
+    messages.value = []
+  }
+
+  // 当前会话标题
+  const currentSessionTitle = computed(() => {
+    const session = sessions.value.find(s => s.id === currentSessionId.value)
+    return session ? session.title : '新对话'
+  })
+
+  return {
+    sessions,
+    currentSessionId,
+    messages,
+    currentSessionTitle,
+    loadUserData,
+    createSession,
+    saveCurrentSession,
+    switchSession,
+    deleteSession,
+    addUserMessage,
+    addAiMessage,
+    updateAiContent,
+    setRefs,
+    toggleRefs,
+    loadHistory,
+    clearMessages
+  }
+})
+```
+
+#### 3.2 会话数据结构
+
+```javascript
+{
+  id: "1719567890123",           // 时间戳作为唯一 ID
+  title: "什么是 Python？",      // 第一条用户消息
+  messages: [                    // 消息列表
+    { role: "user", content: "什么是 Python？" },
+    { role: "ai", content: "Python 是...", refs: [], showRefs: true }
+  ],
+  createdAt: "2026-06-28T12:00:00.000Z"
+}
+```
+
+#### 3.3 localStorage 存储结构
+
+```
+key: "chat_sessions_1" (用户 ID=1)
+value: [
+  { id: "xxx", title: "...", messages: [...] },
+  { id: "yyy", title: "...", messages: [...] }
+]
+
+key: "current_session_id_1"
+value: "xxx"
+```
+
+---
+
+## 七、用户隔离
+
+### 1. 问题
+
+之前所有用户共用同一个 localStorage，对话记录不隔离。
+
+### 2. 解决方案
+
+localStorage 的 key 带用户 ID：
+
+```javascript
+function getStorageKey(key) {
+  const userId = userStore.userId || 'guest'
+  return `${key}_${userId}`
+}
+
+// 例如：
+// 用户 1：chat_sessions_1
+// 用户 2：chat_sessions_2
+```
+
+### 3. 实现
+
+**App.vue**：
+```javascript
+// 监听用户变化，加载对应的聊天数据
+watch(() => userStore.userId, (newUserId) => {
+  if (newUserId) {
+    chatStore.loadUserData()
+  }
+})
+```
+
+**Login.vue**：
+```javascript
+// 登录成功后加载用户的聊天数据
+userStore.login(data.token, data.username, data.user_id)
+chatStore.loadUserData()
+```
+
+---
+
+## 八、左侧边栏
+
+### 1. 创建侧边栏组件
+
+**`components/ChatSidebar.vue`**：
+
+```vue
+<template>
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <el-button type="primary" @click="newChat" class="new-chat-btn">
+        + 新对话
+      </el-button>
+    </div>
+    
+    <div class="session-list">
+      <div
+        v-for="session in chatStore.sessions"
+        :key="session.id"
+        :class="['session-item', { active: session.id === chatStore.currentSessionId }]"
+        @click="chatStore.switchSession(session.id)"
+      >
+        <div class="session-title">{{ session.title }}</div>
+        <el-button
+          type="danger"
+          size="small"
+          @click.stop="chatStore.deleteSession(session.id)"
+          class="delete-btn"
+        >
+          ×
+        </el-button>
+      </div>
+      
+      <div v-if="chatStore.sessions.length === 0" class="empty">
+        暂无对话记录
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { useChatStore } from '../stores/chat'
+
+const chatStore = useChatStore()
+
+function newChat() {
+  chatStore.createSession()
+}
+</script>
+```
+
+### 2. 更新布局
+
+**App.vue**：
+
+```vue
+<template>
+  <div class="app-container">
+    <nav>...</nav>
+    
+    <div class="main-content">
+      <!-- 聊天页面显示侧边栏 -->
+      <ChatSidebar v-if="route.path === '/' && userStore.isLoggedIn()" />
+      
+      <!-- 路由出口 -->
+      <router-view class="router-view" />
+    </div>
+  </div>
+</template>
+```
+
+### 3. 侧边栏样式
+
+```css
+.sidebar {
+  width: 260px;
+  height: 100%;
+  background: #fafafa;  /* 奶白色 */
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #eee;
+}
+
+.session-item:hover {
+  background: #f0f0f0;
+}
+
+.session-item.active {
+  background: #ecf5ff;  /* 浅蓝色 */
+}
+```
+
+---
+
+## 九、引用片段折叠
+
+### 1. 问题
+
+引用片段默认展开，占用太多空间。
+
+### 2. 解决方案
+
+添加折叠/展开功能，点击标题切换。
+
+### 3. 实现
+
+**`stores/chat.js`**：
+```javascript
+function toggleRefs(index) {
+  if (messages.value[index]) {
+    messages.value[index].showRefs = !messages.value[index].showRefs
+  }
+}
+```
+
+**`views/Chat.vue`**：
+```vue
+<div v-if="msg.refs && msg.refs.length > 0" class="references">
+  <div class="refs-header" @click="chatStore.toggleRefs(index)">
+    📚 引用了 {{ msg.refs.length }} 个文档片段
+    <span class="toggle-icon">{{ msg.showRefs ? '▼' : '▶' }}</span>
+  </div>
+  <div v-show="msg.showRefs" class="refs-list">
+    <div v-for="(ref, i) in msg.refs" :key="i" class="ref-item">
+      <span class="ref-index">#{{ i + 1 }}</span>
+      <span class="ref-content">{{ ref }}</span>
+    </div>
+  </div>
+</div>
+```
+
+---
+
+## 十、完整流程图
+
+### 对话会话管理
+
+```
+用户登录
+    ↓
+loadUserData() 加载该用户的会话列表
+    ↓
+显示在左侧边栏
+    ↓
+用户点击 "新对话"
+    ↓
+createSession() 创建新会话
+    ↓
+用户发送消息
+    ↓
+addUserMessage() + addAiMessage()
+    ↓
+saveCurrentSession() 保存到 localStorage
+    ↓
+用户切换页面再回来
+    ↓
+消息还在（Pinia 状态）
+    ↓
+用户点击其他会话
+    ↓
+switchSession() 切换会话
+    ↓
+加载该会话的消息
+```
+
+### 用户隔离
+
+```
+用户 1 登录
+    ↓
+localStorage key: chat_sessions_1
+    ↓
+加载用户 1 的对话
+
+用户 2 登录
+    ↓
+localStorage key: chat_sessions_2
+    ↓
+加载用户 2 的对话
+```
+
+---
+
+## 十一、核心概念复习
+
+### Pinia 状态持久化
+
+```javascript
+// 问题：Pinia 状态刷新后丢失
+// 解决：同步写入 localStorage
+
+// 保存
+localStorage.setItem('chat_sessions', JSON.stringify(sessions.value))
+
+// 加载
+sessions.value = JSON.parse(localStorage.getItem('chat_sessions') || '[]')
+```
+
+### localStorage 用户隔离
+
+```javascript
+// 问题：所有用户共用 localStorage
+// 解决：key 带用户 ID
+
+function getStorageKey(key) {
+  const userId = userStore.userId || 'guest'
+  return `${key}_${userId}`
+}
+
+// 用户 1：chat_sessions_1
+// 用户 2：chat_sessions_2
+```
+
+### watch 监听
+
+```javascript
+// 监听某个值的变化，变化时执行回调
+watch(() => userStore.userId, (newUserId) => {
+  if (newUserId) {
+    chatStore.loadUserData()
+  }
+})
+```
+
+---
+
+## 十二、当前项目结构
+
+```
+pythonPJ/
+├── backend/
+│   ├── main.py
+│   ├── database.py
+│   ├── models.py
+│   ├── routers/
+│   │   ├── chat.py
+│   │   ├── doc.py
+│   │   ├── rag.py
+│   │   └── user.py
+│   └── services/
+│       ├── llm_service.py
+│       ├── doc_service.py
+│       ├── rag_service.py
+│       └── auth_service.py
+├── frontend/
+│   ├── src/
+│   │   ├── App.vue
+│   │   ├── main.js
+│   │   ├── api.js
+│   │   ├── components/
+│   │   │   └── ChatSidebar.vue
+│   │   ├── router/
+│   │   │   └── index.js
+│   │   ├── stores/
+│   │   │   ├── user.js
+│   │   │   └── chat.js
+│   │   └── views/
+│   │       ├── Chat.vue
+│   │       ├── Docs.vue
+│   │       ├── VectorDB.vue
+│   │       └── Login.vue
+│   └── package.json
+├── README.md
+└── 复盘/
+```
+
+---
+
+## 十三、剩余任务
 
 | 项目 | 状态 |
 |------|------|
