@@ -241,4 +241,49 @@ onMounted(() => loadDocs())
   color: #888;
   margin-top: 2px;
 }
+
+/* ===== 移动端（<768px） ===== */
+@media (max-width: 768px) {
+  .docs-container {
+    padding: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  /* 上传卡片改纵向堆叠，避免图标+文字+两按钮挤一行溢出 */
+  .upload-card {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .upload-info p {
+    font-size: 12px;
+  }
+
+  .upload-actions {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  /* 两个按钮各占一行，更易点按 */
+  .upload-actions :deep(.el-upload),
+  .upload-actions :deep(.el-button) {
+    width: 100%;
+  }
+
+  .doc-item {
+    gap: 8px;
+    padding: 10px;
+  }
+
+  .doc-icon {
+    font-size: 20px;
+  }
+}
 </style>

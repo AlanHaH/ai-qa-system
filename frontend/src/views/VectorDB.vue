@@ -211,4 +211,31 @@ onMounted(() => loadChunks())
   word-break: break-word;
   white-space: pre-wrap;
 }
+
+/* ===== 移动端（<768px） ===== */
+@media (max-width: 768px) {
+  .vector-container {
+    padding: 16px;
+  }
+
+  .page-header h1 {
+    font-size: 20px;
+  }
+
+  .stats-card {
+    padding: 16px;
+  }
+
+  /* 取消固定高度内滚动，随页面自然滚动（手机上体验更好） */
+  .chunk-items {
+    max-height: none;
+  }
+
+  /* 长 UUID 换行而非溢出 */
+  .chunk-id {
+    flex: 1;
+    min-width: 0;
+    word-break: break-all;
+  }
+}
 </style>

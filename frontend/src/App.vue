@@ -1,8 +1,9 @@
 <script setup>
-import { onMounted, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useUserStore } from './stores/user'
 import { useChatStore } from './stores/chat'
+import { Menu } from '@element-plus/icons-vue'
 import ChatSidebar from './components/ChatSidebar.vue'
 
 const router = useRouter()
@@ -24,6 +25,23 @@ watch(() => userStore.userId, async (newUserId) => {
   }
 })
 
+// 移动端侧边栏抽屉开关
+const sidebarOpen = ref(false)
+
+function toggleSidebar() {
+  sidebarOpen.value = !sidebarOpen.value
+}
+
+// 路由切换时关闭抽屉，避免从 /docs 返回 / 后抽屉自动弹开
+watch(() => route.path, () => {
+  sidebarOpen.value = false
+})
+
+// 抽屉打开时锁定背景滚动（移动端）
+watch(sidebarOpen, (open) => {
+  document.body.style.overflow = open ? 'hidden' : ''
+})
+
 async function logout() {
   await chatStore.saveCurrentSession()
   userStore.logout()
@@ -37,6 +55,14 @@ async function logout() {
     <!-- 导航栏 -->
     <nav>
       <div class="nav-left">
+        <button
+          v-if="route.path === '/' && userStore.isLoggedIn()"
+          class="hamburger"
+          @click="toggleSidebar"
+          aria-label="打开菜单"
+        >
+          <el-icon :size="20"><Menu /></el-icon>
+        </button>
         <div class="logo">
           <span class="logo-mark">问</span>
           <span class="logo-text">学习问答</span>
@@ -60,11 +86,22 @@ async function logout() {
     <!-- 主体区域 -->
     <div class="main-content">
       <!-- 聊天页面显示侧边栏 -->
-      <ChatSidebar v-if="route.path === '/' && userStore.isLoggedIn()" />
+      <ChatSidebar
+        v-if="route.path === '/' && userStore.isLoggedIn()"
+        :open="sidebarOpen"
+        @close="sidebarOpen = false"
+      />
       
       <!-- 路由出口 -->
       <router-view class="router-view" />
     </div>
+
+    <!-- 移动端底部 Tab 栏（桌面隐藏） -->
+    <nav v-if="userStore.isLoggedIn()" class="bottom-nav">
+      <router-link to="/">聊天</router-link>
+      <router-link to="/docs">知识库</router-link>
+      <router-link to="/vectordb">向量库</router-link>
+    </nav>
   </div>
 </template>
 
@@ -220,5 +257,106 @@ nav {
 .router-view {
   flex: 1;
   overflow-y: auto;
+}
+
+/* 汉堡按钮：桌面隐藏，移动端显示 */
+.hamburger {
+  display: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  color: #333;
+  line-height: 1;
+}
+
+.hamburger:hover {
+  background: #f5f5f5;
+}
+
+/* 底部 Tab 栏：桌面隐藏 */
+.bottom-nav {
+  display: none;
+}
+
+/* ===== 移动端（<768px） ===== */
+@media (max-width: 768px) {
+  /* 动态视口高度：跟随移动端 URL 栏/键盘（桌面 100dvh 等于 100vh，无副作用） */
+  @supports (height: 100dvh) {
+    .app-container {
+      height: 100dvh;
+    }
+  }
+
+  nav {
+    padding: 0 12px;
+  }
+
+  .nav-left {
+    gap: 12px;
+  }
+
+  /* 汉堡按钮出现 */
+  .hamburger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* 隐藏文字导航与用户名，只留 logo / 头像 */
+  .nav-links {
+    display: none;
+  }
+
+  .user-name {
+    display: none;
+  }
+
+  .user-info {
+    gap: 4px;
+  }
+
+  .logout {
+    padding: 4px 6px;
+  }
+
+  .login-btn {
+    padding: 6px 12px;
+  }
+
+  /* 给底部 Tab 栏让出空间 */
+  .main-content {
+    padding-bottom: calc(56px + env(safe-area-inset-bottom));
+  }
+
+  /* 底部 Tab 栏 */
+  .bottom-nav {
+    display: flex;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 90;
+    height: calc(56px + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
+    background: #fff;
+    border-top: 1px solid #e5e5e5;
+  }
+
+  .bottom-nav a {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    color: #666;
+    font-size: 13px;
+  }
+
+  .bottom-nav a.router-link-active {
+    color: #409eff;
+    font-weight: 500;
+  }
 }
 </style>

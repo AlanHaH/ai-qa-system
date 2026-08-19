@@ -1,0 +1,17 @@
+/* 移动端全局样式（跨组件规则） */
+
+/* 去掉手机上点击元素的灰色高亮 */
+body {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Element Plus 弹层在窄屏下的宽度适配（如 Docs 删除确认框、消息提示） */
+@media (max-width: 768px) {
+  .el-message-box {
+    width: calc(100vw - 32px) !important;
+    max-width: 90vw !important;
+  }
+  .el-message {
+    max-width: calc(100vw - 32px) !important;
+  }
+}

@@ -304,11 +304,32 @@ async function submit() {
 
 /* 窄屏：只显示表单，隐藏品牌区 */
 @media (max-width: 768px) {
+  .login-page {
+    padding: 24px 16px;
+  }
+
+  /* 动态视口高度：跟随移动端 URL 栏/键盘 */
+  @supports (min-height: 100dvh) {
+    .login-page {
+      min-height: calc(100dvh - 56px);
+    }
+  }
+
   .login-card {
     width: 420px;
   }
+
   .brand {
     display: none;
+  }
+
+  /* 收窄表单内边距，缓解手机键盘挤压 */
+  .form-panel {
+    padding: 28px 20px;
+  }
+
+  .form-sub {
+    margin-bottom: 20px;
   }
 }
 </style>

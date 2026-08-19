@@ -527,6 +527,61 @@ async function send() {
   background: #a0cfff;
   cursor: not-allowed;
 }
+
+/* ===== 移动端（<768px） ===== */
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100%;          /* 交给 flex 布局，自动扣除顶部导航与底部 Tab 空间 */
+    max-width: 100%;
+    padding: 12px;
+  }
+
+  .chat-header {
+    margin-bottom: 12px;
+  }
+
+  .chat-header h1 {
+    font-size: 20px;
+  }
+
+  .subtitle {
+    font-size: 12px;
+  }
+
+  .chat-box {
+    padding: 12px;
+    margin-bottom: 12px;
+    border-radius: 10px;
+  }
+
+  .welcome {
+    padding: 32px 16px;
+  }
+
+  .avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .bubble-wrapper {
+    max-width: 88%;
+  }
+
+  .bubble {
+    font-size: 15px;
+    padding: 10px 12px;
+    line-height: 1.6;
+  }
+
+  .option-row {
+    gap: 10px;
+  }
+
+  .input-wrapper {
+    gap: 6px;
+  }
+}
 </style>
 
 <!-- Markdown 渲染样式（非 scoped：v-html 注入的内容不受 scoped 影响） -->
