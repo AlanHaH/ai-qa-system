@@ -41,6 +41,12 @@ services:
       - backend
     ports:
       - "80:80"
+      - "443:443"
+    volumes:
+      # ACME 证书验证目录（Let's Encrypt 自动续期用）
+      - /opt/acme-challenge/.well-known:/usr/share/nginx/html/.well-known:ro
+      # SSL 证书（acme.sh 签发，续期后自动更新）
+      - /root/.acme.sh/aiyo.pw_ecc:/etc/nginx/certs:ro
     restart: unless-stopped
 
 volumes:
