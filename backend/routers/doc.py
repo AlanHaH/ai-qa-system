@@ -111,3 +111,28 @@ def delete_doc(doc_id: int, db: Session = Depends(get_db), user_id: int = Depend
     db.delete(doc)
     db.commit()
     return {"message": "删除成功"}
+
+
+@router.get("/doc/{doc_id}")
+def doc_detail(doc_id: int, db: Session = Depends(get_db), user_id: int = Depends(require_user)):
+    """查看单个文档内容（预览用途，超长截断避免前端卡顿）"""
+    doc = db.query(Document).filter(
+        Document.id == doc_id, Document.user_id == user_id
+    ).first()
+    if not doc:
+        return {"error": "文档不存在"}
+
+    content = doc.content or ""
+    truncated = False
+    # 超过 5 万字符只返回开头部分（纯预览）
+    if len(content) > 50000:
+        content = content[:50000]
+        truncated = True
+
+    return {
+        "id": doc.id,
+        "filename": doc.filename,
+        "status": doc.status,
+        "content": content,
+        "truncated": truncated,
+    }

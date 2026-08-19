@@ -38,7 +38,7 @@
         <div v-for="doc in docs" :key="doc.id" class="doc-item">
           <div class="doc-icon">📎</div>
           <div class="doc-info">
-            <div class="doc-name">{{ doc.filename }}</div>
+            <div class="doc-name" @click="viewDoc(doc.id)">{{ doc.filename }}</div>
             <div class="doc-time">{{ doc.created_at }}</div>
             <div class="doc-status">
               <el-tag v-if="doc.status === 'processing'" type="warning" size="small">向量化中...</el-tag>
@@ -50,6 +50,12 @@
         </div>
       </div>
     </div>
+
+    <!-- 文档内容预览弹窗 -->
+    <el-dialog v-model="viewVisible" :title="viewDocName" width="min(640px, 92vw)" top="6vh">
+      <div class="doc-content">{{ viewContent }}</div>
+      <div v-if="viewTruncated" class="doc-truncated-tip">内容较长，仅显示前 5 万字符（预览）</div>
+    </el-dialog>
   </div>
 </template>
 
@@ -61,6 +67,25 @@ import api from '../api'
 const docs = ref([])
 const selectedFile = ref(null)
 const uploading = ref(false)
+
+// 文档内容预览弹窗
+const viewVisible = ref(false)
+const viewDocName = ref('')
+const viewContent = ref('')
+const viewTruncated = ref(false)
+
+async function viewDoc(id) {
+  const res = await api.get(`/doc/${id}`)
+  const data = res.data
+  if (data.error) {
+    ElMessage.error(data.error)
+    return
+  }
+  viewDocName.value = data.filename
+  viewContent.value = data.content || '（无内容）'
+  viewTruncated.value = data.truncated
+  viewVisible.value = true
+}
 
 // 加载文档列表
 async function loadDocs() {
@@ -269,6 +294,33 @@ onUnmounted(() => clearInterval(pollTimer))
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.doc-name:hover {
+  color: #409eff;
+}
+
+/* 文档预览弹窗内容 */
+.doc-content {
+  max-height: 60vh;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.7;
+  color: #333;
+  background: #f8f9fa;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.doc-truncated-tip {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #909399;
+  text-align: center;
 }
 
 .doc-time {
