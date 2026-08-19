@@ -2,6 +2,7 @@ import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
 from routers import chat, doc, rag, session, user
 from database import engine, Base
 import models
@@ -17,6 +18,18 @@ app = FastAPI()
 def init_db():
     """启动时自动建表（幂等，已存在的表不受影响）"""
     Base.metadata.create_all(engine)
+    # 手动迁移：document 表加 status 列（create_all 不会给已存在的表加列）
+    with engine.connect() as conn:
+        exists = conn.execute(text(
+            "SELECT COUNT(*) FROM information_schema.columns "
+            "WHERE table_schema = DATABASE() AND table_name = 'document' AND column_name = 'status'"
+        )).scalar()
+        if not exists:
+            conn.execute(text(
+                "ALTER TABLE document ADD COLUMN status VARCHAR(20) NOT NULL DEFAULT 'completed' "
+                "COMMENT '向量化状态：processing/completed/failed'"
+            ))
+            conn.commit()
 
 # 允许跨域（前端在5173端口，后端在8000端口）
 app.add_middleware(

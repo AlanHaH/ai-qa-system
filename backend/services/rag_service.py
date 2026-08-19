@@ -1,9 +1,14 @@
+import threading
+
 import chromadb
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 COLLECTION_NAME = "documents"
+
+# Chroma 写入锁：多个文档后台异步向量化时串行写，避免并发写冲突
+_write_lock = threading.Lock()
 
 # 初始化 Chroma 向量库（数据存在 backend/chroma_db 目录）
 # ChromaDB 自带 Embedding 功能，不需要调外部 API
@@ -40,7 +45,8 @@ def add_document(doc_id: int, text: str, user_id: int = 0, filename: str = ""):
         for c in chunks
     ]
     ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
-    vectorstore.add_documents(docs, ids=ids)
+    with _write_lock:
+        vectorstore.add_documents(docs, ids=ids)
 
 
 def delete_document(doc_id: int, user_id: int = 0):

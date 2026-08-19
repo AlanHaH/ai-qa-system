@@ -40,6 +40,11 @@
           <div class="doc-info">
             <div class="doc-name">{{ doc.filename }}</div>
             <div class="doc-time">{{ doc.created_at }}</div>
+            <div class="doc-status">
+              <el-tag v-if="doc.status === 'processing'" type="warning" size="small">向量化中...</el-tag>
+              <el-tag v-else-if="doc.status === 'failed'" type="danger" size="small">处理失败</el-tag>
+              <el-tag v-else type="success" size="small">已完成</el-tag>
+            </div>
           </div>
           <el-button type="danger" size="small" @click="remove(doc.id)">删除</el-button>
         </div>
@@ -49,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import api from '../api'
 
@@ -61,6 +66,26 @@ const uploading = ref(false)
 async function loadDocs() {
   const res = await api.get('/doc/list')
   docs.value = res.data
+}
+
+// 轮询向量化状态：2 秒一次，直到没有 "processing" 的文档
+let pollTimer = null
+let hadProcessing = false
+
+function startPolling() {
+  if (pollTimer) return
+  pollTimer = setInterval(async () => {
+    await loadDocs()
+    const pending = docs.value.some(d => d.status === 'processing')
+    if (!pending) {
+      if (hadProcessing) {
+        ElMessage.success('向量化完成，文档已可检索')
+        hadProcessing = false
+      }
+      clearInterval(pollTimer)
+      pollTimer = null
+    }
+  }, 2000)
 }
 
 // 选择文件
@@ -85,9 +110,11 @@ async function upload() {
     if (data.error) {
       ElMessage.error(data.error)
     } else {
-      ElMessage.success(data.message)
+      ElMessage.success('上传成功，正在后台向量化...')
       selectedFile.value = null
-      loadDocs()
+      await loadDocs()
+      hadProcessing = true
+      startPolling()
     }
   } catch (err) {
     ElMessage.error('上传失败：' + err.message)
@@ -112,7 +139,15 @@ async function remove(id) {
   }
 }
 
-onMounted(() => loadDocs())
+onMounted(async () => {
+  await loadDocs()
+  // 刷新页面时若有文档仍在向量化，继续轮询
+  if (docs.value.some(d => d.status === 'processing')) {
+    startPolling()
+  }
+})
+
+onUnmounted(() => clearInterval(pollTimer))
 </script>
 
 <style scoped>
@@ -240,6 +275,10 @@ onMounted(() => loadDocs())
   font-size: 12px;
   color: #888;
   margin-top: 2px;
+}
+
+.doc-status {
+  margin-top: 4px;
 }
 
 /* ===== 移动端（<768px） ===== */
