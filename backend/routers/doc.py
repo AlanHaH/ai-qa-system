@@ -22,10 +22,10 @@ async def upload_doc(file: UploadFile = File(...), db: Session = Depends(get_db)
     """上传文档，提取文本并保存到数据库"""
     content = await file.read()
 
-    # 限制文件大小为 10MB
-    max_size = 10 * 1024 * 1024  # 10MB
+    # 限制文件大小为 30MB（与 nginx client_max_body_size、前端提示一致）
+    max_size = 30 * 1024 * 1024  # 30MB
     if len(content) > max_size:
-        return {"error": "文件太大，最大支持 10MB"}
+        return {"error": "文件太大，最大支持 30MB"}
 
     text = extract_text(content, file.filename)
 

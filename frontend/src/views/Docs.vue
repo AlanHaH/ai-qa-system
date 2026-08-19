@@ -9,7 +9,7 @@
       <div class="upload-icon">📄</div>
       <div class="upload-info">
         <h3>上传文档</h3>
-        <p>支持 PDF、TXT、MD 格式，最大 10MB</p>
+        <p>支持 PDF、TXT、MD 格式，最大 30MB</p>
       </div>
       <div class="upload-actions">
         <el-upload
@@ -79,7 +79,7 @@ async function upload() {
   try {
     const res = await api.post('/doc/upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 120000
+      timeout: 300000   // 5 分钟：大文件文本提取 + 向量化耗时较长
     })
     const data = res.data
     if (data.error) {
