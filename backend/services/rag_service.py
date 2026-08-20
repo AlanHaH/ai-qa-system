@@ -30,9 +30,10 @@ def _get_splitter() -> RecursiveCharacterTextSplitter:
     )
 
 
-def add_document(doc_id: int, text: str, user_id: int = 0, filename: str = ""):
+def add_document(doc_id: int, text: str, user_id: int = 0, filename: str = "", batch_size: int = 300):
     """
-    把文档切分后存入向量库，并记录用户和文档来源。
+    把文档切分后分批存入向量库，并记录用户和文档来源。
+    分批写入（每次 batch_size 片）可显著降低大文件向量化的内存峰值，避免低内存服务器卡死。
     """
     chunks = _get_splitter().split_text(text)
     if not chunks:
@@ -46,7 +47,8 @@ def add_document(doc_id: int, text: str, user_id: int = 0, filename: str = ""):
     ]
     ids = [f"doc_{doc_id}_chunk_{i}" for i in range(len(chunks))]
     with _write_lock:
-        vectorstore.add_documents(docs, ids=ids)
+        for i in range(0, len(docs), batch_size):
+            vectorstore.add_documents(docs[i:i + batch_size], ids=ids[i:i + batch_size])
 
 
 def delete_document(doc_id: int, user_id: int = 0):
