@@ -1,3 +1,4 @@
+import os
 import threading
 
 import chromadb
@@ -11,13 +12,32 @@ COLLECTION_NAME = "documents"
 _write_lock = threading.Lock()
 
 # 初始化 Chroma 向量库（数据存在 backend/chroma_db 目录）
-# ChromaDB 自带 Embedding 功能，不需要调外部 API
 chroma_client = chromadb.PersistentClient(path="chroma_db")
-collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
 
-# LangChain 封装现有 collection（不传 embedding_function，默认即 all-MiniLM-L6-v2，
-# 与旧数据写入时 ChromaDB 默认 embedding 完全一致，旧向量检索不受影响）
-vectorstore = Chroma(client=chroma_client, collection_name=COLLECTION_NAME)
+# 云端 embedding（硅基流动 SiliconFlow，OpenAI 兼容）：
+# 配置 EMBEDDING_API_KEY 后，embedding 计算走云端 API，服务器不加载本地模型，
+# 内存/CPU 压力大幅下降（适合低配服务器，大文件向量化不再卡）。
+# 未配置 key 时回退 ChromaDB 内置本地模型（all-MiniLM-L6-v2）。
+EMBEDDING_API_KEY = os.getenv("EMBEDDING_API_KEY", "")
+EMBEDDING_BASE_URL = os.getenv("EMBEDDING_BASE_URL", "https://api.siliconflow.cn/v1")
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-m3")
+
+if EMBEDDING_API_KEY:
+    from langchain_openai import OpenAIEmbeddings
+    embedding_function = OpenAIEmbeddings(
+        model=EMBEDDING_MODEL,
+        api_key=EMBEDDING_API_KEY,
+        base_url=EMBEDDING_BASE_URL,
+    )
+else:
+    embedding_function = None
+
+collection = chroma_client.get_or_create_collection(name=COLLECTION_NAME)
+vectorstore = Chroma(
+    client=chroma_client,
+    collection_name=COLLECTION_NAME,
+    embedding_function=embedding_function,
+)
 
 
 def _get_splitter() -> RecursiveCharacterTextSplitter:

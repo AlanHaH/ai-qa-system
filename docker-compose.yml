@@ -31,6 +31,9 @@ services:
       BASE_URL: ${BASE_URL}
       MODEL_NAME: ${MODEL_NAME}
       TAVILY_API_KEY: ${TAVILY_API_KEY}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
     volumes:
       - chroma_data:/app/chroma_db
       # embedding 模型缓存持久化（避免容器重建后从 S3 重新下载 79MB，国内 S3 极慢）
